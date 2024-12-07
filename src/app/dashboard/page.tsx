@@ -4,8 +4,14 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
-import { FaFacebook } from "react-icons/fa";
 import { FiLogOut } from "react-icons/fi";
+import Image from 'next/image';
+import { AxiosError } from "axios";
+
+
+interface ErrorResponse {
+  message: string;
+}
 
 const Dashboard = () => {
   const [carModel, setCarModel] = useState("");
@@ -13,34 +19,41 @@ const Dashboard = () => {
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("Lahore");
   const [maxPictures, setMaxPictures] = useState(1);
-  const [images, setImages] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  const handleFileChange = (e) => {
-    const selectedFiles = Array.from(e.target.files);
-    if (selectedFiles.length > maxPictures) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles) {
+      setMessage("No files selected.");
+      return;
+    }
+
+    const filesArray = Array.from(selectedFiles);
+    if (filesArray.length > maxPictures) {
       setMessage(`You can only upload up to ${maxPictures} images.`);
       return;
     }
-    setImages(selectedFiles);
-    const previews = selectedFiles.map((file) => URL.createObjectURL(file));
+
+    setImages(filesArray);
+    const previews = filesArray.map((file) => URL.createObjectURL(file));
     setImagePreviews(previews);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData();
     formData.append("carModel", carModel);
     formData.append("price", price);
     formData.append("phone", phone);
     formData.append("city", city);
-    formData.append("maxPictures", maxPictures);
+    formData.append("maxPictures", maxPictures.toString());
     images.forEach((image) => formData.append("images", image));
 
     try {
-      const response = await axios.post(
+      await axios.post(
         "http://localhost:5000/api/auth/createCarForm",
         formData,
         {
@@ -58,7 +71,12 @@ const Dashboard = () => {
       setImages([]);
       setImagePreviews([]);
     } catch (error) {
-      setMessage(error.response?.data?.message || "An error occurred.");
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<ErrorResponse>;
+        setMessage(axiosError.response?.data.message || "An error occurred.");
+      } else {
+        setMessage("An unexpected error occurred.");
+      }
     }
   };
 
@@ -71,9 +89,7 @@ const Dashboard = () => {
     <div className="vehicle-form-container">
       <div className="logout-icon" onClick={handleLogout}>
         <Button>
-          {" "}
           <FiLogOut className="h-5 w-5" />
-          <i className="fas fa-sign-out-alt"></i>
         </Button>
       </div>
 
@@ -143,14 +159,16 @@ const Dashboard = () => {
               type="number"
               id="maxPictures"
               value={maxPictures}
-              onChange={(e) =>
-                setMaxPictures(Math.min(Math.max(e.target.value, 1), 10))
-              }
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                setMaxPictures(Math.min(Math.max(value, 1), 10));
+              }}
               min={1}
               max={10}
               required
             />
           </div>
+
           <div className="form-group">
             <label htmlFor="images">Upload Images</label>
             <input
@@ -163,10 +181,15 @@ const Dashboard = () => {
           </div>
           <div className="image-previews">
             {imagePreviews.map((src, index) => (
-              <img key={index} src={src} alt={`Preview ${index + 1}`} />
+              <Image
+                key={index}
+                src={src}
+                alt={`Preview ${index + 1}`}
+                width={100}
+                height={100}
+              />
             ))}
           </div>
-
           <button type="submit">Submit</button>
         </form>
         {message && <p>{message}</p>}
@@ -174,4 +197,5 @@ const Dashboard = () => {
     </div>
   );
 };
+
 export default Dashboard;
